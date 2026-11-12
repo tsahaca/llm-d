@@ -1,0 +1,58 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../base
+
+patches:
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: modelserver
+      spec:
+        replicas: 1
+        template:
+          spec:
+            nodeSelector:
+              cloud.google.com/gke-nodepool: l4-pool-c
+            tolerations:
+              - key: nvidia.com/gpu
+                operator: Exists
+                effect: NoSchedule
+            # affinity:
+            #   podAntiAffinity:
+            #     requiredDuringSchedulingIgnoredDuringExecution:
+            #       - labelSelector:
+            #           matchLabels:
+            #             llm-d.ai/guide: optimized-baseline
+            #         topologyKey: kubernetes.io/hostname
+            containers:
+              - name: modelserver
+                args:
+                  - google/gemma-3-1b-it
+                  - --host=0.0.0.0
+                  - --port=8000
+                  - --tensor-parallel-size=1
+                  - --max-model-len=4096
+                  - --gpu-memory-utilization=0.85
+                  - --enable-prefix-caching
+                  - --shutdown-timeout=45
+                resources:
+                  requests:
+                    cpu: "2"
+                    memory: 8Gi
+                    nvidia.com/gpu: 1
+                  limits:
+                    cpu: "4"
+                    memory: 16Gi
+                    nvidia.com/gpu: 1
+            volumes:
+              - name: shm
+                emptyDir:
+                  medium: Memory
+                  sizeLimit: 2Gi
